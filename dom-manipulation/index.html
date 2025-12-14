@@ -8,6 +8,14 @@
 <body>
   <h1>Dynamic Quote Generator</h1>
 
+  <!-- Sync status and manual sync trigger -->
+  <div id="syncStatus" style="margin-bottom: 10px; font-size: 0.9rem; color: #555;">
+    Sync status: Idle
+  </div>
+  <button id="syncNow">Sync Now</button>
+
+  <hr>
+
   <!-- Category filter -->
   <label for="categoryFilter">Filter by category:</label>
   <select id="categoryFilter" onchange="filterQuotes()">
