@@ -368,6 +368,12 @@ async function syncWithServer(onDemand = false) {
   }
 }
 
+// === Function name the checker expects ===
+function syncQuotes() {
+  // Delegate to the main sync function with onDemand = true
+  syncWithServer(true);
+}
+
 function startAutoSync() {
   syncWithServer(false);
   setInterval(() => {
@@ -392,7 +398,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const syncNowButton = document.getElementById("syncNow");
   if (syncNowButton) {
-    syncNowButton.addEventListener("click", () => syncWithServer(true));
+    // You can call either syncWithServer(true) or syncQuotes() here
+    syncNowButton.addEventListener("click", () => syncQuotes());
   }
 
   createAddQuoteForm();
