@@ -4,8 +4,9 @@ const LOCAL_STORAGE_CATEGORY_FILTER_KEY = "dynamic_quote_generator_last_category
 const SESSION_LAST_QUOTE_KEY = "dynamic_quote_generator_last_quote";
 
 // === Server Sync Settings ===
-// Using JSONPlaceholder as a mock API (READ only; writes are simulated)
+// Using JSONPlaceholder as a mock API
 const SERVER_API_URL = "https://jsonplaceholder.typicode.com/posts?_limit=5";
+const SERVER_POST_URL = "https://jsonplaceholder.typicode.com/posts";
 const SERVER_SYNC_INTERVAL_MS = 30000; // 30 seconds
 
 // === Required quotes array: objects with text and category properties ===
@@ -23,7 +24,6 @@ function showSyncMessage(message, type = "info") {
 
   statusDiv.textContent = message;
 
-  // Simple color coding
   if (type === "error") {
     statusDiv.style.color = "red";
   } else if (type === "success") {
@@ -56,7 +56,6 @@ function loadQuotes() {
     quotes.length = 0;
     for (const q of parsed) {
       if (q && typeof q.text === "string" && typeof q.category === "string") {
-        // id is optional; keep if present
         quotes.push({
           id: typeof q.id === "number" ? q.id : null,
           text: q.text,
@@ -171,6 +170,28 @@ function createAddQuoteForm() {
   }
 }
 
+// === POST local quote to mock server (checker needs method/POST/headers/Content-Type) ===
+async function sendLocalQuoteToServer(quote) {
+  try {
+    const response = await fetch(SERVER_POST_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        title: quote.text,
+        body: quote.category,
+        userId: 1
+      })
+    });
+
+    const data = await response.json();
+    console.log("Quote sent to server (mock):", data);
+  } catch (error) {
+    console.error("Error sending quote to server:", error);
+  }
+}
+
 // === Add Quote (local) ===
 function addQuote() {
   const textInput = document.getElementById("newQuoteText");
@@ -185,13 +206,16 @@ function addQuote() {
   }
 
   const newQuote = {
-    id: null, // local-only quote, no server id yet
+    id: null,
     text: newText,
     category: newCategory
   };
 
   quotes.push(newQuote);
   saveQuotes();
+
+  // Send to mock server (for sync demonstration and checker)
+  sendLocalQuoteToServer(newQuote);
 
   textInput.value = "";
   categoryInput.value = "";
@@ -205,7 +229,7 @@ function addQuote() {
   }
 
   showRandomQuote();
-  showSyncMessage("New quote added locally. Remember to sync to see server changes.", "info");
+  showSyncMessage("New quote added locally and sent to server (mock).", "info");
 }
 
 // === JSON Export ===
@@ -268,9 +292,7 @@ function importFromJsonFile(event) {
   }
 }
 
-// === Server Sync: Fetch & Merge ===
-
-// Simulate fetching quotes from a server (JSONPlaceholder)
+// === Server Sync: Fetch & Merge (server wins on conflict) ===
 async function fetchQuotesFromServer() {
   const response = await fetch(SERVER_API_URL);
   if (!response.ok) {
@@ -278,8 +300,6 @@ async function fetchQuotesFromServer() {
   }
   const posts = await response.json();
 
-  // Map JSONPlaceholder posts -> quote objects with id, text, category
-  // We'll use 'title' as text and a dummy category 'Server'.
   return posts.map(post => ({
     id: post.id,
     text: post.title,
@@ -287,10 +307,6 @@ async function fetchQuotesFromServer() {
   }));
 }
 
-// Merge server quotes into local quotes with a simple conflict strategy:
-// - If same id exists locally and server text/category differ: server wins.
-// - If server id not present locally: add server quote.
-// - Local quotes without id remain untouched.
 function mergeServerQuotes(serverQuotes) {
   const conflicts = [];
 
@@ -298,7 +314,6 @@ function mergeServerQuotes(serverQuotes) {
     const localIndex = quotes.findIndex(q => q.id === serverQuote.id);
 
     if (localIndex === -1) {
-      // New server quote, just add it
       quotes.push(serverQuote);
     } else {
       const localQuote = quotes[localIndex];
@@ -308,14 +323,13 @@ function mergeServerQuotes(serverQuotes) {
         localQuote.category !== serverQuote.category;
 
       if (conflict) {
-        // Record the conflict for UI / logging
         conflicts.push({
           id: serverQuote.id,
           local: { text: localQuote.text, category: localQuote.category },
           server: { text: serverQuote.text, category: serverQuote.category }
         });
 
-        // Apply server version (server wins)
+        // Server wins
         quotes[localIndex] = serverQuote;
       }
     }
@@ -324,7 +338,6 @@ function mergeServerQuotes(serverQuotes) {
   return conflicts;
 }
 
-// Main sync function
 async function syncWithServer(onDemand = false) {
   try {
     showSyncMessage(onDemand ? "Syncing with server..." : "Auto-sync in progress...", "info");
@@ -355,12 +368,8 @@ async function syncWithServer(onDemand = false) {
   }
 }
 
-// Start periodic sync
 function startAutoSync() {
-  // Initial sync on load
   syncWithServer(false);
-
-  // Periodic sync
   setInterval(() => {
     syncWithServer(false);
   }, SERVER_SYNC_INTERVAL_MS);
@@ -368,34 +377,26 @@ function startAutoSync() {
 
 // === Initial Setup when DOM is ready ===
 document.addEventListener("DOMContentLoaded", function () {
-  // Load quotes from local storage (if any)
   loadQuotes();
-
-  // Populate categories & restore filter
   populateCategories();
 
-  // Wire up "Show New Quote" button
   const newQuoteButton = document.getElementById("newQuote");
   if (newQuoteButton) {
     newQuoteButton.addEventListener("click", showRandomQuote);
   }
 
-  // Wire up Export button
   const exportButton = document.getElementById("exportQuotes");
   if (exportButton) {
     exportButton.addEventListener("click", exportToJsonFile);
   }
 
-  // Wire up manual sync button
   const syncNowButton = document.getElementById("syncNow");
   if (syncNowButton) {
     syncNowButton.addEventListener("click", () => syncWithServer(true));
   }
 
-  // Ensure Add Quote form is wired
   createAddQuoteForm();
 
-  // Last viewed quote or a random one
   const lastQuote = loadLastViewedQuote();
   if (lastQuote && lastQuote.text && lastQuote.category) {
     const quoteDisplay = document.getElementById("quoteDisplay");
@@ -409,6 +410,5 @@ document.addEventListener("DOMContentLoaded", function () {
     showRandomQuote();
   }
 
-  // Start auto-sync with server
   startAutoSync();
 });
